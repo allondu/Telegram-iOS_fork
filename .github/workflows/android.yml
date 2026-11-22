@@ -1,0 +1,77 @@
+name: Android APK
+
+on:
+  push:
+    branches: [android-port, main, master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  APK_NAME: Courier-debug.apk
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Locate the preinstalled Android SDK
+        run: |
+          echo "ANDROID_HOME=${ANDROID_HOME}"
+          echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT}"
+          ls "${ANDROID_HOME}/platforms" || true
+          echo "sdk.dir=${ANDROID_HOME}" > local.properties
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x gradlew
+
+      - name: Build debug APK
+        env:
+          COURIER_API_ID: ${{ secrets.COURIER_API_ID }}
+          COURIER_API_HASH: ${{ secrets.COURIER_API_HASH }}
+        run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
+
+      - name: Prepare APK
+        run: |
+          mkdir -p dist
+          cp app/build/outputs/apk/debug/app-debug.apk "dist/${APK_NAME}"
+          ls -lh dist
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: courier-debug-apk
+          path: dist/${{ env.APK_NAME }}
+          if-no-files-found: error
+
+      - name: Publish GitHub release
+        if: github.event_name == 'push'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: courier-debug-latest
+          name: Courier debug APK (latest build)
+          body: |
+            Debug-signed Courier APK built from `${{ github.sha }}`.
+
+            Install it on Android 8.0+ (minSdk 26) and sign in with your own
+            Telegram `api_id` / `api_hash`.
+          files: dist/${{ env.APK_NAME }}
+          prerelease: true
+          fail_on_unmatched_files: true
+
+      - name: Upload build reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-reports
+          path: app/build/reports/
