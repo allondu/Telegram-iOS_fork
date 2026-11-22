@@ -12,12 +12,14 @@ plugins {
 val defaultApiId: String = "3893395"
 val defaultApiHash: String = "e2adbe11ee0f092ced6043c4e051fdda"
 
-val courierApiId: String = (project.findProperty("COURIER_API_ID") as String?)
-    ?: System.getenv("COURIER_API_ID")
-    ?: defaultApiId
-val courierApiHash: String = (project.findProperty("COURIER_API_HASH") as String?)
-    ?: System.getenv("COURIER_API_HASH")
-    ?: defaultApiHash
+// CI defines COURIER_API_ID/COURIER_API_HASH even when the secret is unset, so
+// blank values have to mean "not provided" instead of "use an empty key".
+fun buildSetting(key: String): String? =
+    (project.findProperty(key) as String?)?.takeIf { it.isNotBlank() }
+        ?: System.getenv(key)?.takeIf { it.isNotBlank() }
+
+val courierApiId: String = buildSetting("COURIER_API_ID") ?: defaultApiId
+val courierApiHash: String = buildSetting("COURIER_API_HASH") ?: defaultApiHash
 
 android {
     namespace = "com.courier.messenger"
